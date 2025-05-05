@@ -4,29 +4,29 @@
 *.pyd
 __pycache__/
 
-# Django stuff:
+# Django stuff
 *.log
 *.pot
-*.pyc
 *.db
 *.sqlite3
 db.sqlite3
 
 # Virtual Environment
 venv/
-.env/
+.env  # only this is needed
+# You had ".env/" which implies a folder; usually .env is a file
 
 # Django migrations
-*/migrations/*
-!*/migrations/__init__.py
+**/migrations/*
+!**/migrations/__init__.py
 
 # VS Code
 .vscode/
 
-# JetBrains IDE (PyCharm, IntelliJ)
+# JetBrains IDEs
 .idea/
 
-# MacOS
+# macOS
 .DS_Store
 
 # Windows
