@@ -6,7 +6,7 @@ from .models import *
 @admin.register(Account)
 class AccountAdmin(BaseUserAdmin):
     ordering = ['email']
-    list_display = ['email', 'username', 'date_joined', 'last_login', 'is_active', 'is_staff']
+    list_display = ['get_profile_image', 'email', 'username', 'date_joined', 'last_login', 'is_active', 'is_staff']
     search_fields = ('email', 'username')
     readonly_fields = ('date_joined', 'last_login')
 
@@ -31,10 +31,14 @@ class AccountAdmin(BaseUserAdmin):
 
 @admin.register(TravelerProfile)
 class TravelerProfileAdmin(admin.ModelAdmin):
-    list_display = ('user', 'date_of_birth', 'top_destination')
+    list_display = ('user', 'date_of_birth', 'top_destination', 'get_profile_image_filename')
     search_fields = ('user__username', 'user__email', 'top_destination')
     list_filter = ('top_destination',)
     raw_id_fields = ('user',)
+
+    def get_profile_image_filename(self, obj):
+        return obj.get_profile_image_filename() if obj.profile_image else _('No Image')
+    get_profile_image_filename.short_description = _('Profile Image Filename')
 
 
 @admin.register(AgencyProfile)
@@ -47,16 +51,14 @@ class AgencyProfileAdmin(admin.ModelAdmin):
 
 @admin.register(Trip)
 class TripAdmin(admin.ModelAdmin):
-    list_display = ('agency', 'destination', 'trip_date', 'price')
+    list_display = ('agency', 'destination', 'trip_date', 'price', 'currency')
     list_filter = ('agency', 'trip_date')
     search_fields = ('agency__agency_name', 'destination')
     ordering = ('-trip_date',)
 
+
 @admin.register(EmailVerification)
 class EmailVerificationAdmin(admin.ModelAdmin):
-    list_display = ('user', 'code')
-
-
-
-
-
+    list_display = ('user', 'code', 'created_at')
+    list_filter = ('created_at',)
+    search_fields = ('user__email', 'code')

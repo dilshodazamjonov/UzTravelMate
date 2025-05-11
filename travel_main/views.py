@@ -10,6 +10,7 @@ from django.core.validators import EmailValidator
 from django.core.exceptions import ValidationError
 from django.utils.dateparse import parse_date
 from django.contrib.auth import get_user_model
+import requests
 
 
 
@@ -61,6 +62,22 @@ def generate_verification_code():
     return str(random.randint(100000, 999999))
 
 
+def get_user_location_by_ip(ip_address):
+    try:
+        response = requests.get(f'https://ipapi.co/{ip_address}/json/')
+        if response.status_code == 200:
+            data = response.json()
+            return {
+                'ip': ip_address,
+                'city': data.get('city'),
+                'region': data.get('region'),
+                'country': data.get('country_name')
+            }
+    except Exception:
+        pass
+    return None
+
+
 @csrf_exempt
 def registration_view_user(request):
     if request.method == 'POST':
@@ -89,6 +106,25 @@ def registration_view_user(request):
                 user.travelerprofile.date_of_birth = dob
                 user.travelerprofile.save()
 
+            # Get IP address
+            ip = request.META.get('HTTP_X_FORWARDED_FOR')
+            if ip:
+                ip = ip.split(',')[0]
+            else:
+                ip = request.META.get('REMOTE_ADDR')
+
+            # Get user location
+            location_data = get_user_location_by_ip(ip)
+            print("User Location:", location_data)
+
+            # Optionally store location in TravelerProfile model here if fields exist
+            # Example:
+            # if location_data:
+            #     profile = user.travelerprofile
+            #     profile.country = location_data['country']
+            #     profile.city = location_data['city']
+            #     profile.save()
+
             # Generate and send verification code
             code = generate_verification_code()
             EmailVerification.objects.create(user=user, code=code)
@@ -100,7 +136,6 @@ def registration_view_user(request):
                 [email],
                 fail_silently=False,
             )
-            print(generate_verification_code())
 
             return JsonResponse({'message': 'Код подтверждения отправлен на email'}, status=201)
 

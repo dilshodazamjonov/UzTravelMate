@@ -1,11 +1,16 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
-from django.urls import reverse
+from django.conf import settings
+from django.utils import timezone
+from datetime import timedelta
+
+from django.utils.html import format_html
 
 
-# Менеджер пользовательской модели
+# ---------------------- #
+# Custom User Manager    #
+# ---------------------- #
 class MyAccountManager(BaseUserManager):
-
     def create_user(self, email, username, password=None):
         if not email:
             raise ValueError('У пользователя должен быть адрес электронной почты')
@@ -14,11 +19,10 @@ class MyAccountManager(BaseUserManager):
 
         user = self.model(
             email=self.normalize_email(email),
-            username=username
+            username=username.lower()  # Ensuring username is lowercase
         )
         user.set_password(password)
         user.save(using=self._db)
-
         return user
 
     def create_superuser(self, email, username, password):
@@ -31,46 +35,31 @@ class MyAccountManager(BaseUserManager):
         user.is_staff = True
         user.is_superuser = True
         user.save(using=self._db)
-
         return user
 
+# ---------------------- #
+# Helper for Profile Img #
+# ---------------------- #
+def get_profile_image_filepath(instance, filename):
+    return f'profile_image/{instance.pk}/profile_image.png'
 
-# Путь к файлу изображения профиля
-def get_profile_image_filepath(self, filename):
-    return f'profile_image/{self.pk}/profile_image.png'
-
-
-# Изображение по умолчанию
 def get_default_profile_image():
-    return 'UzTravelMate/dummy_image.png'
+    return 'defaults/profile_default.png'  # Updated to a more intuitive path
 
-
-# Кастомная модель пользователя
+# ---------------------- #
+# Custom User Model      #
+# ---------------------- #
 class Account(AbstractBaseUser, PermissionsMixin):
-    email = models.EmailField(
-        max_length=60, unique=True, db_index=True, verbose_name='Электронная почта'
-    )
-    username = models.CharField(
-        max_length=30, unique=True, verbose_name='Имя пользователя'
-    )
-    date_joined = models.DateTimeField(
-        auto_now_add=True, verbose_name='Дата регистрации'
-    )
-    last_login = models.DateTimeField(
-        auto_now=True, verbose_name='Последний вход'
-    )
-    is_admin = models.BooleanField(
-        default=False, verbose_name='Администратор'
-    )
-    is_active = models.BooleanField(
-        default=True, verbose_name='Активен'
-    )
-    is_staff = models.BooleanField(
-        default=False, verbose_name='Персонал'
-    )
-    is_superuser = models.BooleanField(
-        default=False, verbose_name='Суперпользователь'
-    )
+    email = models.EmailField(max_length=60, unique=True, db_index=True, verbose_name='Электронная почта')
+    username = models.CharField(max_length=30, unique=True, verbose_name='Имя пользователя')
+    date_joined = models.DateTimeField(auto_now_add=True, verbose_name='Дата регистрации')
+    last_login = models.DateTimeField(auto_now=True, verbose_name='Последний вход')
+    is_admin = models.BooleanField(default=False, verbose_name='Администратор')
+    is_active = models.BooleanField(default=False, verbose_name='Активен')  # Default set to False to ensure verification
+    is_staff = models.BooleanField(default=False, verbose_name='Персонал')
+    is_superuser = models.BooleanField(default=False, verbose_name='Суперпользователь')
+    hide_email = models.BooleanField(default=True, verbose_name='Скрыть email')
+
     profile_image = models.ImageField(
         max_length=255,
         upload_to=get_profile_image_filepath,
@@ -79,20 +68,15 @@ class Account(AbstractBaseUser, PermissionsMixin):
         default=get_default_profile_image,
         verbose_name='Изображение профиля'
     )
-    hide_email = models.BooleanField(
-        default=True, verbose_name='Скрыть email'
-    )
 
-    def get_display_email(self):
-        if self.hide_email:
-            return "Email Hidden"
-        return self.email
 
     USER_TYPE_CHOICES = (
         ('traveler', 'Traveler'),
         ('agency', 'Travel Hosting Agency'),
     )
     user_type = models.CharField(max_length=20, choices=USER_TYPE_CHOICES, db_index=True, default='traveler')
+
+    profile_completed = models.BooleanField(default=False)
 
     objects = MyAccountManager()
 
@@ -106,11 +90,12 @@ class Account(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return self.username
 
-    def get_profile_image_filename(self):
-        try:
-            return str(self.profile_image)[str(self.profile_image).index(f'profile_image/{self.pk}/'):]
-        except ValueError:
-            return str(self.profile_image)
+    def get_display_email(self):
+        return "Email Hidden" if self.hide_email else self.email
+
+    def get_profile_image(self):
+        return format_html('<img src="{}" width="60" height="60" style="object-fit: cover;" />',
+                           self.profile_image.url)
 
     def has_perm(self, perm, obj=None):
         return self.is_admin
@@ -118,21 +103,28 @@ class Account(AbstractBaseUser, PermissionsMixin):
     def has_module_perms(self, app_label):
         return True
 
-    # def get_absolute_url(self):
-    #     return reverse('admin:account_account_change', args=[self.pk])
+# ---------------------- #
+# Traveler Profile       #
+# ---------------------- #
+def default_interests():
+    return []
 
+def default_travel_style():
+    return []
 
-class Profile(models.Model):
+class TravelerProfile(models.Model):
+    profile_image = models.ImageField(
+        max_length=255,
+        upload_to=get_profile_image_filepath,
+        null=True,
+        blank=True,
+        default=get_default_profile_image,
+        verbose_name='Изображение профиля'
+    )
     user = models.OneToOneField(Account, on_delete=models.CASCADE)
-
-    class Meta:
-        abstract = True
-
-
-class TravelerProfile(Profile):
     date_of_birth = models.DateField(null=True, blank=True)
-    interests = models.JSONField(default=list, blank=True)
-    travel_style = models.JSONField(default=list, blank=True)
+    interests = models.JSONField(default=default_interests, blank=True)
+    travel_style = models.JSONField(default=default_travel_style, blank=True)
     top_destination = models.CharField(max_length=100, blank=True, null=True)
 
     def __str__(self):
@@ -142,9 +134,33 @@ class TravelerProfile(Profile):
         verbose_name = "Профиль путешественника"
         verbose_name_plural = "Профили путешественников"
 
+    def get_profile_image_filename(self):
+        try:
+            return str(self.profile_image)[str(self.profile_image).index(f'profile_image/{self.pk}/'): ]
+        except ValueError:
+            return str(self.profile_image)
 
-# AgencyProfile model
-class AgencyProfile(Profile):
+    def save(self, *args, **kwargs):
+        # Update the Account's profile image if TravelerProfile's image is set
+        if self.profile_image:
+            self.user.profile_image = self.profile_image
+            self.user.save()
+        super().save(*args, **kwargs)
+
+
+# ---------------------- #
+# Agency Profile         #
+# ---------------------- #
+class AgencyProfile(models.Model):
+    profile_image = models.ImageField(
+        max_length=255,
+        upload_to=get_profile_image_filepath,
+        null=True,
+        blank=True,
+        default=get_default_profile_image,
+        verbose_name='Изображение профиля'
+    )
+    user = models.OneToOneField(Account, on_delete=models.CASCADE)
     agency_name = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
     location = models.CharField(max_length=100)
@@ -157,12 +173,15 @@ class AgencyProfile(Profile):
         verbose_name = "Профиль агентства"
         verbose_name_plural = "Профили агентств"
 
-
+# ---------------------- #
+# Trip Model             #
+# ---------------------- #
 class Trip(models.Model):
     agency = models.ForeignKey(AgencyProfile, on_delete=models.CASCADE, related_name='trips')
     destination = models.CharField(max_length=100)
     trip_date = models.DateField()
     price = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=5, default='USD')  # Added currency field
 
     def __str__(self):
         return f"Trip to {self.destination} on {self.trip_date}"
@@ -171,21 +190,16 @@ class Trip(models.Model):
         verbose_name = "Поездка"
         verbose_name_plural = "Поездки"
 
-from django.conf import settings
-
+# ---------------------- #
+# Email Verification     #
+# ---------------------- #
 class EmailVerification(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    code = models.CharField(max_length=6)
+    code = models.CharField(max_length=6, db_index=True)  # Added db_index for performance
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def is_expired(self):
+        return timezone.now() > self.created_at + timedelta(minutes=15)
 
     def __str__(self):
         return f"Verification for {self.user.email}"
-
-
-
-
-
-
-
-
-
