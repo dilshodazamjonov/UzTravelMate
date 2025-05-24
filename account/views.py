@@ -1,12 +1,12 @@
 from rest_framework.authentication import BasicAuthentication
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.generics import RetrieveAPIView, RetrieveUpdateAPIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.utils.http import urlsafe_base64_encode
 from django.utils.encoding import force_bytes
 from django.contrib.auth import get_user_model
-from rest_framework.decorators import api_view, authentication_classes
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from django.core.mail import send_mail
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -86,3 +86,16 @@ def reset_password_confirm(request, uidb64, token):
     user.save()
 
     return Response({'message': 'Password has been reset successfully.'}, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])  # Use IsAuthenticated if needed
+def get_user_identifiers(request):
+    users = Account.objects.all()
+    result = []
+
+    for user in users:
+        if user.username:
+            result.append(user.username)
+
+    return Response(result)

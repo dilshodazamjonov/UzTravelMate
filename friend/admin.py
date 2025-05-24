@@ -15,7 +15,7 @@ class FriendListAdmin(admin.ModelAdmin):
 
 @admin.register(FriendRequest)
 class FriendRequestAdmin(admin.ModelAdmin):
-    list_display = ('sender', 'receiver', 'is_active', 'timestamp')
+    list_display = ('pk', 'sender', 'receiver', 'is_active', 'timestamp')
     search_fields = ('sender__username', 'receiver__username')
     list_filter = ('is_active', 'timestamp')
     readonly_fields = ('timestamp',)
