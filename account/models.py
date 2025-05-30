@@ -197,3 +197,12 @@ class EmailVerification(models.Model):
 
     def __str__(self):
         return f"Verification for {self.user.email}"
+
+class UserLocation(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='location')
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Location of {self.user.username}"

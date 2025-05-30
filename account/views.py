@@ -1,21 +1,22 @@
 from rest_framework.authentication import BasicAuthentication
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import IsAuthenticated, AllowAny,IsAuthenticatedOrReadOnly
 from rest_framework.generics import RetrieveAPIView, RetrieveUpdateAPIView
 from rest_framework.response import Response
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework import status
 from django.utils.http import urlsafe_base64_encode
 from django.utils.encoding import force_bytes
 from django.contrib.auth import get_user_model
-from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from django.core.mail import send_mail
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.http import urlsafe_base64_decode
 from django.contrib.auth.tokens import default_token_generator
-from rest_framework.permissions import IsAuthenticatedOrReadOnly
-import json
 from django.shortcuts import get_object_or_404
+import json
 from friend.auth import CsrfExemptSessionAuthentication
+from friend.utils import get_nearby_users
 from .serializers import *
 
 
@@ -99,3 +100,43 @@ def get_user_identifiers(request):
             result.append(user.username)
 
     return Response(result)
+
+
+
+@api_view(['GET', 'PUT', 'POST'])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@permission_classes([IsAuthenticated])
+def user_location_view(request):
+    user = request.user
+
+    location, _ = UserLocation.objects.get_or_create(user=user)
+
+    if request.method == 'GET':
+        serializer = UserLocationSerializer(location)
+        return Response(serializer.data)
+
+    elif request.method in ['PUT', 'POST']:
+        serializer = UserLocationSerializer(location, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    return Response(status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@permission_classes([IsAuthenticated])
+def nearby_users_view(request):
+    current_user = request.user
+    radius_km = request.query_params.get('radius_km', 100)
+    try:
+        radius_km = float(radius_km)
+    except ValueError:
+        radius_km = 50
+
+    nearby_users = get_nearby_users(current_user, radius_km)
+
+    serializer = AccountSerializer(nearby_users, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)

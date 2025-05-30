@@ -84,3 +84,14 @@ class TravelerProfileSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         instance.save()
         return instance
+
+
+class UserLocationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserLocation
+        fields = ['latitude', 'longitude', 'updated_at']
+        read_only_fields = ['updated_at']
+
+
+
+
