@@ -88,11 +88,20 @@ MIDDLEWARE = [
 
 
 
-CORS_ALLOW_ALL_ORIGINS = True  # Разрешает запросы со всех доменов (для тестов)
+
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "https://travelpair.vercel.app",
+]
 CORS_ALLOW_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 CORS_ALLOW_HEADERS = ['*']
 
+
+
+CSRF_COOKIE_AGE = 31449600  # How long the csrf token stays valid (in seconds)
+CSRF_COOKIE_PATH = '/'  # The path where the CSRF cookie is available
+CSRF_COOKIE_DOMAIN = None
 
 ROOT_URLCONF = 'UzTravelMate.urls'
 
