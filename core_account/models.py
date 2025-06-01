@@ -21,6 +21,7 @@ class MyAccountManager(BaseUserManager):
             email=self.normalize_email(email),
             username=username.lower()  # Ensuring username is lowercase
         )
+        user.is_active = False
         user.set_password(password)
         user.save(using=self._db)
         return user
@@ -34,6 +35,7 @@ class MyAccountManager(BaseUserManager):
         user.is_admin = True
         user.is_staff = True
         user.is_superuser = True
+        user.is_active = True
         user.save(using=self._db)
         return user
 

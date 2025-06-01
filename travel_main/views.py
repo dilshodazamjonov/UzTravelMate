@@ -9,7 +9,7 @@ from django.conf import settings
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from account.models import Account, EmailVerification
+from core_account.models import Account, EmailVerification
 import json
 import random
 
@@ -70,7 +70,6 @@ def register_view(request):
         username = data.get('username')
         password = data.get('password')
         password_confirm = data.get('password_confirm')
-        dob_str = data.get('date_of_birth')
 
         if not all([email, username, password, password_confirm]):
             return JsonResponse({'message': 'Пожалуйста, заполните все поля'}, status=400)
@@ -83,11 +82,6 @@ def register_view(request):
         user.is_active = False
         user.user_type = 'traveler'
         user.save()
-
-        dob = parse_date(dob_str) if dob_str else None
-        if dob:
-            user.travelerprofile.date_of_birth = dob
-            user.travelerprofile.save()
 
         code = generate_verification_code()
         EmailVerification.objects.create(user=user, code=code)

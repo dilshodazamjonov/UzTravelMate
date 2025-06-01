@@ -1,5 +1,5 @@
 from django.db import models
-from account.models import *
+from core_account.models import *
 
 # ---------------------- #
 # Trip Model             #

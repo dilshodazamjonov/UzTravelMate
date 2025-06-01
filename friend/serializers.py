@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from account.models import Account
+from core_account.models import Account
 from friend.models import FriendRequest, FriendList
 
 class FriendRequestSerializer(serializers.Serializer):

@@ -42,7 +42,40 @@ DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL')
 
 PASSWORD_RESET_TIMEOUT = 14400
 
-AUTH_USER_MODEL = 'account.Account'
+
+'''
+    AUTHENTICATION WITH GOOGLE ACCOUNT
+'''
+
+ACCOUNT_EMAIL_VERIFICATION = 'mandatory'  # enforce email confirmation
+ACCOUNT_EMAIL_REQUIRED = True
+ACCOUNT_AUTHENTICATION_METHOD = 'email'
+ACCOUNT_ADAPTER = 'core_account.adapters.CustomAccountAdapter'
+# LOGIN_REDIRECT_URL = 'http://localhost:3000/social/callback/'
+# ACCOUNT_LOGOUT_REDIRECT_URL = 'http://localhost:3000/'
+
+LOGIN_REDIRECT_URL = "/"
+
+SOCIALACCOUNT_PROVIDERS = {
+    'google': {
+        'APP': {
+            'client_id': os.getenv('GOOGLE_CLIENT_ID'),
+            'secret': os.getenv('GOOGLE_CLIENT_SECRET'),
+            'key': ''
+        },
+        'SCOPE': [
+            'profile',
+            'email',
+        ],
+        'AUTH_PARAMS': {
+            'access_type': 'online',
+        }
+    }
+}
+
+
+
+AUTH_USER_MODEL = 'core_account.Account'
 
 INSTALLED_APPS = [
     'jazzmin',
@@ -60,9 +93,15 @@ INSTALLED_APPS = [
     'corsheaders',
     'drf_yasg',
 
+    # Registration with google
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'allauth.socialaccount.providers.google',
+
     # My apps
     'travel_main',
-    'account',
+    'core_account',
     'friend',
 ]
 
@@ -76,16 +115,24 @@ REST_FRAMEWORK = {
 }
 
 
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',  # Needed for admin login
+    'allauth.account.auth_backends.AuthenticationBackend',  # Needed for allauth
+]
+
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+
+SITE_ID = 1  # You already have this
 
 
 
@@ -223,7 +270,7 @@ JAZZMIN_SETTINGS = {
     "site_logo_classes": "img-center rounded-circle",
     "site_icon": None,
 
-    "search_model": ["account.Account", "auth.Group"],
+    "search_model": ["core_account.Account", "auth.Group"],
     "user_avatar": None,
 
     "show_sidebar": True,

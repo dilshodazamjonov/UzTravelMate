@@ -1,6 +1,6 @@
 from friend.models import *
 import math
-from account.models import UserLocation, TravelerProfile
+from core_account.models import UserLocation, TravelerProfile
 
 
 def get_friend_request_or_false(sender, receiver):

@@ -2,7 +2,7 @@ from django.urls import path
 from .views import *
 
 
-app_name = 'account'
+app_name = 'core_account'
 
 urlpatterns = [
     path('profile/<str:username>/', UserDetailView.as_view(), name='user-detail'),

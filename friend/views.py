@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from django.db.models import Q
 from rest_framework import status
 
-from account.serializers import AccountSerializer
+from core_account.serializers import AccountSerializer
 
 from .auth import CsrfExemptSessionAuthentication
 from .serializers import *
