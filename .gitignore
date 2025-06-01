@@ -14,6 +14,7 @@ db.sqlite3
 # Virtual Environment
 venv/
 .env  # only this is needed
+*.json
 # You had ".env/" which implies a folder; usually .env is a file
 
 # Django migrations
