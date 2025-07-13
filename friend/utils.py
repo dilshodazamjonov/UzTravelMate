@@ -1,4 +1,4 @@
-from friend.models import *
+from friend.models import FriendRequest
 import math
 from core_account.models import UserLocation, TravelerProfile
 
@@ -22,7 +22,7 @@ def haversine(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
     return R * c
 
-def get_nearby_users(current_user, radius_km=100, max_results=15):
+def get_nearby_users(current_user, radius_km : int =100, max_results : int=15):
     try:
         current_location = current_user.location
     except UserLocation.DoesNotExist:

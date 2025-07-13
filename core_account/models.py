@@ -3,7 +3,6 @@ from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, Permis
 from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
-
 from django.utils.html import format_html
 
 
@@ -60,7 +59,7 @@ class Account(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=False, verbose_name='Активен')  # Default set to False to ensure verification
     is_staff = models.BooleanField(default=False, verbose_name='Персонал')
     is_superuser = models.BooleanField(default=False, verbose_name='Суперпользователь')
-    hide_email = models.BooleanField(default=True, verbose_name='Скрыть email')
+    private = models.BooleanField(default=True, verbose_name='Закрытый профиль')
 
     profile_image = models.ImageField(
         max_length=255,
@@ -93,7 +92,7 @@ class Account(AbstractBaseUser, PermissionsMixin):
         return self.username
 
     def get_display_email(self):
-        return "Email Hidden" if self.hide_email else self.email
+        return "Email Hidden" if self.private else self.email
 
     def get_profile_image(self):
         return format_html('<img src="{}" width="60" height="60" style="object-fit: cover;" />',
@@ -117,19 +116,15 @@ def default_travel_style():
     return []
 
 class TravelerProfile(models.Model):
+    user = models.OneToOneField(Account, on_delete=models.CASCADE)
     profile_image = models.ImageField(
         max_length=255,
         upload_to=get_profile_image_filepath,
-        null=True,
-        blank=True,
+        null=True, blank=True,
         default=get_default_profile_image,
         verbose_name='Изображение профиля'
     )
-    user = models.OneToOneField(Account, on_delete=models.CASCADE)
     date_of_birth = models.DateField(null=True, blank=True)
-    interests = models.JSONField(default=default_interests, blank=True)
-    travel_style = models.JSONField(default=default_travel_style, blank=True)
-    top_destination = models.CharField(max_length=100, blank=True, null=True)
 
     def __str__(self):
         return f"{self.user.username}'s Traveler Profile"
@@ -138,27 +133,11 @@ class TravelerProfile(models.Model):
         verbose_name = "Профиль путешественника"
         verbose_name_plural = "Профили путешественников"
 
-    def get_profile_image_filename(self):
-        try:
-            return str(self.profile_image)[str(self.profile_image).index(f'profile_image/{self.pk}/'): ]
-        except ValueError:
-            return str(self.profile_image)
-
-    def is_profile_complete(self):
-        return all([
-            self.date_of_birth,
-            self.interests,
-            self.travel_style,
-            self.top_destination,
-        ])
-
     def save(self, *args, **kwargs):
-        # Update the Account's profile image if TravelerProfile's image is set
         if self.profile_image:
-            self.user.profile_image = self.profile_image
+            self.user.profile_image = self.profile_image # type: ignore # type ignore
             self.user.save()
         super().save(*args, **kwargs)
-
 
 # ---------------------- #
 # Agency Profile         #

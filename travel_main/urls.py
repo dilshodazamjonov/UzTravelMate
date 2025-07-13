@@ -1,18 +1,18 @@
 from django.urls import path
-from .views import *
-
+from .views import (
+    
+    RegisterAPIView,
+    VerifyCodeAPIView, 
+    GoogleOneTapLoginAPIView
+    )
+    
 urlpatterns = [
 
     #   =========== ENDPOINTS FOR AUTHENTICATION =============
 
-    path('login/', login_view, name='login'),
-    path('logout/', logout_view, name='logout'),
-    path('register/', register_view, name='register'),
-    path('verify/', verify_code_view, name='verify'),
+    path('api/register/', RegisterAPIView.as_view(), name='register'),
+    path('api/verify/', VerifyCodeAPIView.as_view(), name='verify'),
+    path('api/google-login/', GoogleOneTapLoginAPIView.as_view(), name='google_login'),
 
-
-    #    ========== ENDPOINT FOR CSRF TOKEN ==================
-
-    path('api/get-csrf/', get_csrf_token, name='get_csrf'),
 ]
 

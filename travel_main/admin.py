@@ -2,18 +2,20 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.translation import gettext_lazy as _
 from core_account.models import Account
-from travel_main.models import *
+from travel_main.models import TravelerProfile, AgencyProfile, Trip, EmailVerification
+from user_preferences.models import TravelerPreferences
 
 @admin.register(Account)
 class AccountAdmin(BaseUserAdmin):
     ordering = ['email']
     list_display = ['get_profile_image', 'email', 'username', 'date_joined', 'last_login', 'is_active', 'is_staff']
+    list_display_links = ('get_profile_image', 'email', 'username')
     search_fields = ('email', 'username')
     readonly_fields = ('date_joined', 'last_login')
 
     fieldsets = (
         (None, {'fields': ('email', 'username', 'password')}),
-        (_('Персональная информация'), {'fields': ('profile_image', 'hide_email')}),
+        (_('Персональная информация'), {'fields': ('profile_image', 'private')}),
         (_('Права доступа'), {
             'fields': ('is_active', 'is_staff', 'is_admin', 'is_superuser', 'groups', 'user_permissions')
         }),
@@ -30,16 +32,20 @@ class AccountAdmin(BaseUserAdmin):
     filter_horizontal = ('groups', 'user_permissions')
 
 
+class TravelerPreferencesInline(admin.StackedInline):
+    model = TravelerPreferences
+    extra = 0
+
 @admin.register(TravelerProfile)
 class TravelerProfileAdmin(admin.ModelAdmin):
-    list_display = ('user', 'date_of_birth', 'top_destination', 'get_profile_image_filename')
-    search_fields = ('user__username', 'user__email', 'top_destination')
-    list_filter = ('top_destination',)
+    list_display = ('user', 'date_of_birth', 'get_profile_image_name')
+    inlines = [TravelerPreferencesInline]
+    search_fields = ('user__username', 'user__email')
     raw_id_fields = ('user',)
 
-    def get_profile_image_filename(self, obj):
-        return obj.get_profile_image_filename() if obj.profile_image else _('No Image')
-    get_profile_image_filename.short_description = _('Profile Image Filename')
+    def get_profile_image_name(self, obj):
+        return obj.profile_image.url if obj.profile_image else _('No Image')
+
 
 
 @admin.register(AgencyProfile)

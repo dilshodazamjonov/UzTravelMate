@@ -1,23 +1,22 @@
-from rest_framework.authentication import BasicAuthentication
-from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import IsAuthenticated, AllowAny,IsAuthenticatedOrReadOnly
-from rest_framework.generics import RetrieveAPIView, RetrieveUpdateAPIView
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
+from rest_framework.generics import RetrieveAPIView
 from rest_framework.response import Response
-from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.views import APIView
 from rest_framework import status
-from django.utils.http import urlsafe_base64_encode
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.utils.http import urlsafe_base64_decode
-from django.contrib.auth.tokens import default_token_generator
 from django.shortcuts import get_object_or_404
-import json
-from friend.auth import CsrfExemptSessionAuthentication
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
+from django.contrib.auth.tokens import default_token_generator
+
 from friend.utils import get_nearby_users
-from .serializers import *
+from .utils import recommend_travelers
+from .serializers import AccountSerializer, TravelerProfileSerializer, UserLocationSerializer
+from .models import Account, TravelerProfile, UserLocation
+from user_preferences.models import TravelerPreferences
 
 
 
@@ -25,7 +24,7 @@ class UserDetailView(RetrieveAPIView):
     serializer_class = AccountSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
 
-    def get_object(self):
+    def get_object(self): # type: ignore
         username = self.kwargs.get('username')
         return get_object_or_404(Account, username=username)
 
@@ -33,28 +32,74 @@ class UserDetailView(RetrieveAPIView):
         return {'request': self.request}
 
 
-@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-class TravelerProfileView(RetrieveUpdateAPIView):
-    serializer_class = TravelerProfileSerializer
+
+
+class TravelerProfileView(APIView):
+    permission_classes = []
+
+    @swagger_auto_schema(responses={200: TravelerProfileSerializer})
+    def get(self, request, email):
+        user = get_object_or_404(Account, email=email)
+        profile = TravelerProfile.objects.filter(user=user).first()
+
+        if not profile:
+            return Response({"detail": "Traveler profile not found."}, status=404)
+
+        serializer = TravelerProfileSerializer(profile, context={'request': request})
+        return Response(serializer.data)
+
+    @swagger_auto_schema(request_body=TravelerProfileSerializer)
+    def put(self, request, email):
+        return self._update_profile(request, email)
+
+    @swagger_auto_schema(request_body=TravelerProfileSerializer)
+    def patch(self, request, email):
+        return self._update_profile(request, email, partial=True)
+
+    def _update_profile(self, request, email, partial=False):
+        user = get_object_or_404(Account, email=email)
+        if request.user != user:
+            return Response({"detail": "You are not allowed to modify another user's profile."}, status=403)
+
+        profile = TravelerProfile.objects.filter(user=user).first()
+        if not profile:
+            return Response({"detail": "Traveler profile not found."}, status=404)
+
+        serializer = TravelerProfileSerializer(profile, data=request.data, partial=partial, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class RecommendedUsersView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get_object(self):
-        return self.request.user.travelerprofile
+    @swagger_auto_schema(responses={200: TravelerProfileSerializer(many=True)})
+    def get(self, request):
+        matches = recommend_travelers(request.user.travelerprofile)
+        serializer = TravelerProfileSerializer(matches, many=True, context={'request': request})
+        return Response(serializer.data)
 
-@csrf_exempt
-def send_password_reset_email(request):
-    if request.method == 'POST':
-        data = json.loads(request.body)
-        email = data.get('email')
 
+class SendPasswordResetEmailView(APIView):
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        required=['email'],
+        properties={'email': openapi.Schema(type=openapi.TYPE_STRING)}))
+    def post(self, request):
+        email = request.data.get('email')
         try:
             user = Account.objects.get(email=email)
         except Account.DoesNotExist:
-            return JsonResponse({'error': 'User not found'}, status=404)
+            return Response({'error': 'User not found'}, status=404)
 
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         token = default_token_generator.make_token(user)
-        reset_link = f"http://localhost:3000/reset-password-confirm/{uid}/{token}/"
+        reset_link = f"https://travelpair.vercel.app/reset-password-confirm/{uid}/{token}/"
 
         send_mail(
             subject='Reset Your Password',
@@ -63,80 +108,136 @@ def send_password_reset_email(request):
             recipient_list=[email],
         )
 
-        return JsonResponse({'message': 'Password reset email sent'})
-    return JsonResponse({'error': 'Only POST method allowed'}, status=405)
+        return Response({'message': 'Password reset email sent'})
 
 
+class ResetPasswordConfirmView(APIView):
+    permission_classes = [AllowAny]
 
-@csrf_exempt
-def reset_password_confirm(request, uidb64, token):
-    try:
-        uid = urlsafe_base64_decode(uidb64).decode()
-        user = get_user_model().objects.get(pk=uid)
-    except Exception:
-        return Response({'error': 'Invalid UID'}, status=status.HTTP_400_BAD_REQUEST)
+    @swagger_auto_schema(request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        required=['new_password'],
+        properties={'new_password': openapi.Schema(type=openapi.TYPE_STRING)}))
+    def post(self, request, uidb64, token):
+        try:
+            uid = urlsafe_base64_decode(uidb64).decode()
+            user = get_user_model().objects.get(pk=uid)
+        except Exception:
+            return Response({'error': 'Invalid UID'}, status=status.HTTP_400_BAD_REQUEST)
 
-    if not default_token_generator.check_token(user, token):
-        return Response({'error': 'Invalid or expired token'}, status=status.HTTP_400_BAD_REQUEST)
+        if not default_token_generator.check_token(user, token):
+            return Response({'error': 'Invalid or expired token'}, status=status.HTTP_400_BAD_REQUEST)
 
-    new_password = request.data.get('new_password')
-    if not new_password:
-        return Response({'error': 'New password required'}, status=status.HTTP_400_BAD_REQUEST)
+        new_password = request.data.get('new_password')
+        if not new_password:
+            return Response({'error': 'New password required'}, status=status.HTTP_400_BAD_REQUEST)
 
-    user.set_password(new_password)
-    user.save()
+        user.set_password(new_password)
+        user.save()
 
-    return Response({'message': 'Password has been reset successfully.'}, status=status.HTTP_200_OK)
-
-
-@api_view(['GET'])
-@permission_classes([AllowAny])  # Use IsAuthenticated if needed
-def get_user_identifiers(request):
-    users = Account.objects.all()
-    result = []
-
-    for user in users:
-        if user.username:
-            result.append(user.username)
-
-    return Response(result)
+        return Response({'message': 'Password has been reset successfully.'})
 
 
+class AllUsersEmails(APIView):
+    permission_classes = [AllowAny]
 
-@api_view(['GET', 'PUT', 'POST'])
-@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@permission_classes([IsAuthenticated])
-def user_location_view(request):
-    user = request.user
+    @swagger_auto_schema(
+        responses={
+            200: openapi.Response(
+                description="List of emails",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_ARRAY,
+                    items=openapi.Schema(type=openapi.TYPE_STRING)
+                )
+            )
+        }
+    )
+    def get(self, request):
+        emails = list(Account.objects.exclude(email='').values_list('email', flat=True))
+        return Response(emails)
 
-    location, _ = UserLocation.objects.get_or_create(user=user)
+class UserLocationView(APIView):
+    permission_classes = [IsAuthenticated]
 
-    if request.method == 'GET':
+    @swagger_auto_schema(responses={200: UserLocationSerializer})
+    def get(self, request):
+        location, _ = UserLocation.objects.get_or_create(user=request.user)
         serializer = UserLocationSerializer(location)
         return Response(serializer.data)
 
-    elif request.method in ['PUT', 'POST']:
+    @swagger_auto_schema(request_body=UserLocationSerializer)
+    def put(self, request):
+        location, _ = UserLocation.objects.get_or_create(user=request.user)
         serializer = UserLocationSerializer(location, data=request.data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    return Response(status=status.HTTP_400_BAD_REQUEST)
+    @swagger_auto_schema(request_body=UserLocationSerializer)
+    def post(self, request):
+        return self.put(request)
 
 
-@api_view(['GET'])
-@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@permission_classes([IsAuthenticated])
-def nearby_users_view(request):
-    current_user = request.user
-    radius_km = request.query_params.get('radius_km', 100)
-    try:
-        radius_km = float(radius_km)
-    except ValueError:
-        radius_km = 50
+class NearbyUsersView(APIView):
+    permission_classes = [IsAuthenticated]
 
-    nearby_users = get_nearby_users(current_user, radius_km)
+    @swagger_auto_schema(manual_parameters=[
+        openapi.Parameter('radius_km', openapi.IN_QUERY, description="Radius in kilometers", type=openapi.TYPE_NUMBER)
+    ])
+    def get(self, request):
+        try:
+            radius_km = float(request.query_params.get('radius_km', 100))
+        except ValueError:
+            radius_km = 50
 
-    serializer = AccountSerializer(nearby_users, many=True)
-    return Response(serializer.data, status=status.HTTP_200_OK)
+        nearby_users = get_nearby_users(request.user, radius_km) # type: ignore
+        serializer = AccountSerializer(nearby_users, many=True)
+        return Response(serializer.data)
+
+
+class ProfileCompletionCheckView(APIView):
+    @swagger_auto_schema(
+        operation_description="Check if the traveler's profile and preferences are complete.",
+        responses={200: "Returns {'is_complete': true/false}"}
+    )
+    def get(self, request, email):
+        user = get_object_or_404(Account, email=email)
+        profile = TravelerProfile.objects.filter(user=user).first()
+
+        if not profile:
+            return Response({"is_complete": False, "reason": "Traveler profile not found."}, status=200)
+
+        preferences = getattr(profile, 'preferences', None)
+
+        profile_complete = bool(profile.date_of_birth and profile.profile_image)
+        preferences_complete = bool(preferences and all([
+            preferences.travel_style,
+            preferences.top_destination,
+            preferences.travel_start_date,
+            preferences.travel_end_date,
+            preferences.budget_level
+        ]))
+        interests_exist = profile.traveler_interests.exists()  # type: ignore
+
+        is_complete = profile_complete and preferences_complete and interests_exist
+
+        return Response({"is_complete": is_complete})
+
+
+
+class TravelChoicesView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({
+            "travel_styles": [
+                {"value": choice[0], "label": choice[1]}
+                for choice in TravelerPreferences._meta.get_field("travel_style").choices # type: ignore
+            ],
+            "budget_levels": [
+                {"value": choice[0], "label": choice[1]}
+                for choice in TravelerPreferences._meta.get_field("budget_level").choices # type: ignore
+            ]
+        })
+    

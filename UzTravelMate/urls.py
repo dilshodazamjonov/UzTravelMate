@@ -20,6 +20,10 @@ from django.urls import path, re_path, include
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
 from . import settings
 
 
@@ -42,11 +46,16 @@ urlpatterns = [
     path('', include('travel_main.urls')),
     path('core_account/', include('core_account.urls', namespace='core_account')),
     path('friend/', include('friend.urls', namespace='friend')),
-    path('accounts/', include('allauth.urls')),
+    path('recommendations/', include('recommendations.urls', namespace='recommendations')),
+    path('user_preferences/', include('user_preferences.urls', namespace='user_preferences')),
+    # path('accounts/', include('allauth.urls')),
 
     re_path(r'^swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
+    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+
 ]
 
 if settings.DEBUG:
